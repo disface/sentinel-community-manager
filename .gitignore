@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+
+# Production builds
+dist/
+dist-electron/
+release/
+
+# Local data & DPAPI encrypted configs
+data/
+*.log
+
+# OS & Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp

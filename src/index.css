@@ -1,0 +1,57 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --accent-color: #2787F5;
+    --accent-hover: #1E6DD0;
+    --accent-subtle: rgba(39, 135, 245, 0.15);
+    --accent-border: rgba(39, 135, 245, 0.4);
+    --accent-glow: rgba(39, 135, 245, 0.25);
+  }
+
+  body {
+    @apply bg-surface-950 text-surface-200 antialiased font-sans select-none overflow-hidden;
+    margin: 0;
+    padding: 0;
+  }
+
+  /* Тонкие стилизованные скроллбары */
+  ::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #0d111a;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #1e2538;
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #2f3a56;
+  }
+}
+
+/* Ползунок громкости и аудио */
+input[type=range] {
+  accent-color: var(--accent-color, #2787F5);
+}
+
+/* Glassmorphism утилита */
+.glass-panel {
+  background: rgba(16, 20, 31, 0.75);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(42, 51, 78, 0.5);
+}
+
+/* Drag-region для кастомного заголовка окна */
+.drag-region {
+  -webkit-app-region: drag;
+}
+
+.no-drag {
+  -webkit-app-region: no-drag;
+}

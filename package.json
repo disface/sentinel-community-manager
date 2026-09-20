@@ -1,0 +1,74 @@
+{
+  "name": "sentinel-community-manager",
+  "version": "1.0.0",
+  "description": "Sentinel Community Manager (SCM) — Автономный портативный десктоп-менеджер сообществ",
+  "main": "dist-electron/main.js",
+  "author": "Максим (@sum1nus) & Antigravity AI",
+  "license": "MIT",
+  "private": false,
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build && tsc -p tsconfig.electron.json",
+    "start": "electron .",
+    "app:dev": "vite build && tsc -p tsconfig.electron.json && electron .",
+    "pack": "npm run build && electron-builder --dir",
+    "dist:portable": "node scripts/patch-portable.js && npm run build && electron-builder --win portable"
+  },
+  "dependencies": {
+    "lucide-react": "^1.16.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "electron": "^34.2.0",
+    "electron-builder": "^25.1.8",
+    "postcss": "^8.5.1",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.3",
+    "vite": "^6.1.0"
+  },
+  "build": {
+    "appId": "com.sentinel.communitymanager",
+    "productName": "Sentinel Community Manager",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "build/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "build/icon.ico",
+        "to": "icon.ico"
+      }
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "dir",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "portable": {
+      "artifactName": "Sentinel-Community-Manager-Portable.exe",
+      "unpackDirName": "runtime"
+    }
+  }
+}
