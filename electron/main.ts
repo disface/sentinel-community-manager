@@ -7,7 +7,7 @@ import { VkService } from './vk-service';
 import { ActivityEvent, AppConfig, QuickTemplate, VKMessage } from './types';
 
 // Встроенная высококонтрастная иконка трея (щит Sentinel в сине-индиго оттенке)
-const TRAY_ICON_B64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAABmJLR0QA/wD/AP+gvaeTAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH6AMTEgQf7gD7OQAAAM1JREFUWMPtV9sNgzAMW1I26AjdgbEDO4AO4R02yA7NEj1W6gNVoqq0UqVvOcmWc7ZzTADAGc6YwYcWv3g8HqR3d3ejGOPo0mKMs7V27D0h58E5p0fG57yvd2/e73fvqQnAGb8H4Jk/x1h/i1FKa61Kqer/rT8F8H5H9t8A8J7340N/CsDaipk/b6y9l1IKkSQJEULgfd/pffgRkCQJAMCyLGEYBoQQ3n3f0/M876/n+RGAc87GmAIAiGgHAKWUiEipqt73fV/d/e26DkSEUkqSJKG2bb/7AQ7Vj/uV+X0uAAAAAElFTkSuQmCC';
+const TRAY_ICON_B64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAA10lEQVR4nO2XSQ7CMAxFbasrLkKPyA3giL0IbI1gFVE78RSxaP8uauL/YqcZAE4lxcycGY+zjBDRFHvxGK2PlxlAi/MLhtpAj5lF2+0iAhD8WXQCwNFLsFSs7MxfQxXmUnsqwKaYRSAIkspuWJQFiKY+BbAqs45kgyIAklm0FNg7xaoOpLZMw8MImw7Z+o7MRYBKiJG5ClABYTHvAmQgrObf75HrVW9xeszNABKIBOE1/8i1D/RKEjEPixtd78+26X4jYAZiFywwc4oC7O73s9M+62kGh9cb1uNwCV65vK4AAAAASUVORK5CYII=';
 
 // 1. ИСТИННАЯ ПОРТАТИВНОСТЬ: настройка путей строго до whenReady()
 const isPortableExe = !!process.env.PORTABLE_EXECUTABLE_DIR;
