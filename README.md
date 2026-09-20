@@ -132,7 +132,7 @@ sentinel-community-manager/
 
 ## 👥 Создатели и благодарности
 
-- **Концепция, UI/UX и продакшн**: Максим ([@disface](https://github.com/disface))
+- **Концепция, UI/UX и продакшн**: Максим sum1nus ([@disface](https://github.com/disface))
 - **Архитектура ядра и разработка**: Antigravity AI (Google DeepMind)
 
 ### Использованные открытые библиотеки и технологии:
