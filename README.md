@@ -42,7 +42,7 @@
 
 ## 🚀 Быстрый старт
 
-1. Скачайте готовый файл **`Sentinel-Community-Manager-Portable.exe`** из раздела [Releases](https://github.com/sum1nus/sentinel-community-manager/releases).
+1. Скачайте готовый файл **`Sentinel-Community-Manager-Portable.exe`** из раздела [Releases](https://github.com/disface/sentinel-community-manager/releases).
 2. Поместите его в любую удобную папку (например, `D:\Apps\SCM`) и запустите.
 3. В открывшемся Мастере настройки укажите:
    - **ID или короткий адрес сообщества** (например, `club12345` или `my_public`).
@@ -65,7 +65,7 @@
 
 ```powershell
 # 1. Клонирование репозитория
-git clone https://github.com/sum1nus/sentinel-community-manager.git
+git clone https://github.com/disface/sentinel-community-manager.git
 cd sentinel-community-manager
 
 # 2. Установка зависимостей
@@ -132,7 +132,7 @@ sentinel-community-manager/
 
 ## 👥 Создатели и благодарности
 
-- **Концепция, UI/UX и продакшн**: Максим ([@sum1nus](https://github.com/sum1nus))
+- **Концепция, UI/UX и продакшн**: Максим ([@disface](https://github.com/disface))
 - **Архитектура ядра и разработка**: Antigravity AI (Google DeepMind)
 
 ### Использованные открытые библиотеки и технологии:

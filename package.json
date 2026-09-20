@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Sentinel Community Manager (SCM) — Автономный портативный десктоп-менеджер сообществ",
   "main": "dist-electron/main.js",
-  "author": "Максим (@sum1nus) & Antigravity AI",
+  "author": "Максим (@disface) & Antigravity AI",
   "license": "MIT",
   "private": false,
   "scripts": {
