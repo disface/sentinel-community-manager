@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { ConversationItem } from '../types/scm';
 
 interface ConversationsListProps {
@@ -28,13 +28,16 @@ export const ConversationsList: React.FC<ConversationsListProps> = ({
   const [filterUnread, setFilterUnread] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
 
-  const filtered = conversations.filter((c) => {
-    const fullName = `${c.user.first_name} ${c.user.last_name}`.toLowerCase();
-    const matchesSearch = fullName.includes(searchQuery.toLowerCase()) ||
-      c.lastMessage.text.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesUnread = !filterUnread || c.unreadCount > 0;
-    return matchesSearch && matchesUnread;
-  });
+  const filtered = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return conversations.filter((c) => {
+      const fullName = `${c.user.first_name} ${c.user.last_name}`.toLowerCase();
+      const matchesSearch = !q || fullName.includes(q) ||
+        (c.lastMessage.text && c.lastMessage.text.toLowerCase().includes(q));
+      const matchesUnread = !filterUnread || c.unreadCount > 0;
+      return matchesSearch && matchesUnread;
+    });
+  }, [conversations, searchQuery, filterUnread]);
 
   const handleScroll = () => {
     if (!listRef.current || isLoading || isLoadingMore || conversations.length >= totalConversationsCount) return;

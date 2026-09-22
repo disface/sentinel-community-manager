@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { ActivityEvent } from '../types/scm';
 
 interface ActivityFeedProps {
@@ -11,32 +11,40 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({ events, onOpenChat, 
   const [filter, setFilter] = useState<'all' | 'unread' | 'subscribers' | 'reactions' | 'comments'>('all');
 
   // Дедупликация каскадных реакций VK (лайк на пост + вложенные фото/видео от одного пользователя)
-  const deduplicatedEvents = events.filter((e, idx, arr) => {
-    if (e.type === 'like') {
-      const duplicateIndex = arr.findIndex(
-        (other, oIdx) =>
-          oIdx < idx &&
-          other.type === 'like' &&
-          other.userId === e.userId &&
-          Math.abs(other.timestamp - e.timestamp) <= 8
-      );
-      if (duplicateIndex !== -1) return false;
-    }
-    return true;
-  });
+  const deduplicatedEvents = useMemo(() => {
+    const seen: ActivityEvent[] = [];
+    return events.filter((e) => {
+      if (e.type === 'like' || e.type === 'repost') {
+        const isCascade = seen.some(
+          (other) =>
+            other.type === e.type &&
+            other.userId === e.userId &&
+            (other.raw?.object_id ?? null) === (e.raw?.object_id ?? null) &&
+            Math.abs(other.timestamp - e.timestamp) <= 8
+        );
+        seen.push(e);
+        if (isCascade) return false;
+      } else {
+        seen.push(e);
+      }
+      return true;
+    });
+  }, [events]);
 
-  const totalUnread = deduplicatedEvents.filter((e) => !e.read).length;
-  const subUnread = deduplicatedEvents.filter((e) => !e.read && (e.type === 'join' || e.type === 'leave')).length;
-  const reactionUnread = deduplicatedEvents.filter((e) => !e.read && (e.type === 'like' || e.type === 'repost')).length;
-  const commentUnread = deduplicatedEvents.filter((e) => !e.read && e.type === 'comment').length;
+  const totalUnread = useMemo(() => deduplicatedEvents.filter((e) => !e.read).length, [deduplicatedEvents]);
+  const subUnread = useMemo(() => deduplicatedEvents.filter((e) => !e.read && (e.type === 'join' || e.type === 'leave')).length, [deduplicatedEvents]);
+  const reactionUnread = useMemo(() => deduplicatedEvents.filter((e) => !e.read && (e.type === 'like' || e.type === 'repost')).length, [deduplicatedEvents]);
+  const commentUnread = useMemo(() => deduplicatedEvents.filter((e) => !e.read && e.type === 'comment').length, [deduplicatedEvents]);
 
-  const filteredEvents = deduplicatedEvents.filter((e) => {
-    if (filter === 'unread') return !e.read;
-    if (filter === 'subscribers') return e.type === 'join' || e.type === 'leave';
-    if (filter === 'reactions') return e.type === 'like' || e.type === 'repost';
-    if (filter === 'comments') return e.type === 'comment';
-    return true;
-  });
+  const filteredEvents = useMemo(() => {
+    return deduplicatedEvents.filter((e) => {
+      if (filter === 'unread') return !e.read;
+      if (filter === 'subscribers') return e.type === 'join' || e.type === 'leave';
+      if (filter === 'reactions') return e.type === 'like' || e.type === 'repost';
+      if (filter === 'comments') return e.type === 'comment';
+      return true;
+    });
+  }, [deduplicatedEvents, filter]);
 
   const getEventIcon = (type: string) => {
     switch (type) {

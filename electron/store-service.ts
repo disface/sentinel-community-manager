@@ -37,6 +37,7 @@ export class StoreService {
   private activityFile: string;
   private config: AppConfig;
   private templates: QuickTemplate[];
+  private tokenLocked: boolean = false;
 
   constructor(appRoot: string) {
     this.dataDir = path.join(appRoot, 'data');
@@ -45,11 +46,39 @@ export class StoreService {
     this.activityFile = path.join(this.dataDir, 'activity.json');
 
     if (!fs.existsSync(this.dataDir)) {
-      fs.mkdirSync(this.dataDir, { recursive: true });
+      try {
+        fs.mkdirSync(this.dataDir, { recursive: true });
+      } catch (e) {
+        console.error('[StoreService] Ошибка создания каталога data:', e);
+      }
     }
 
     this.config = this.loadConfig();
     this.templates = this.loadTemplates();
+  }
+
+  private atomicWriteJson(file: string, data: unknown): void {
+    const json = JSON.stringify(data, null, 2);
+    const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
+    const fd = fs.openSync(tmp, 'w');
+    try {
+      fs.writeFileSync(fd, json, 'utf-8');
+      fs.fsyncSync(fd);
+    } finally {
+      fs.closeSync(fd);
+    }
+    fs.renameSync(tmp, file);
+  }
+
+  private readRawConfig(): any | null {
+    try {
+      if (fs.existsSync(this.configFile)) {
+        return JSON.parse(fs.readFileSync(this.configFile, 'utf-8'));
+      }
+    } catch {
+      /* ignore */
+    }
+    return null;
   }
 
   private loadConfig(): AppConfig {
@@ -93,20 +122,26 @@ export class StoreService {
             try {
               token = safeStorage.decryptString(Buffer.from(parsed.encryptedToken, 'base64'));
             } catch (e) {
-              console.warn('[StoreService] Ошибка расшифровки токена через DPAPI:', e);
-              token = parsed.token || '';
+              console.error('[StoreService] Ошибка расшифровки токена через DPAPI:', e);
+              token = '';
+              this.tokenLocked = true;
             }
           } else {
-            token = parsed.token || '';
+            console.error('[StoreService] DPAPI недоступно при старте — токен временно заблокирован.');
+            token = '';
+            this.tokenLocked = true;
           }
         } else {
           token = parsed.token || '';
         }
 
+        const { encryptedToken, ...rest } = parsed;
+
         return {
           ...defaultConfig,
-          ...parsed,
+          ...rest,
           token,
+          hasToken: Boolean(token && token.length > 0) || Boolean(parsed.encryptedToken),
         };
       } catch (e) {
         console.error('[StoreService] Ошибка чтения config.json:', e);
@@ -120,31 +155,65 @@ export class StoreService {
     return { ...this.config };
   }
 
+  public getConfigForRenderer(): AppConfig {
+    const { token, ...safe } = this.config as any;
+    delete safe.encryptedToken;
+    return {
+      ...safe,
+      hasToken: Boolean(this.config.token && this.config.token.length > 0) || this.tokenLocked,
+    };
+  }
+
   public saveConfig(updates: Partial<AppConfig>): AppConfig {
     this.config = { ...this.config, ...updates };
 
-    const toSave: any = { ...this.config };
-    const plainToken = toSave.token;
+    const rawConfig = this.readRawConfig() || {};
+    const { token, hasToken, ...rest } = this.config as any;
+    delete rest.encryptedToken;
 
-    let isEncAvailable = false;
-    try {
-      isEncAvailable = safeStorage.isEncryptionAvailable();
-    } catch {
-      isEncAvailable = false;
-    }
+    const toSave: any = { ...rest };
 
-    if (plainToken && isEncAvailable) {
-      try {
-        const encrypted = safeStorage.encryptString(plainToken);
-        toSave.encryptedToken = encrypted.toString('base64');
-        delete toSave.token;
-      } catch (e) {
-        console.warn('[StoreService] Не удалось зашифровать токен через DPAPI:', e);
+    if (updates.token !== undefined) {
+      const cleanToken = updates.token.trim();
+      if (cleanToken) {
+        let isEncAvailable = false;
+        try {
+          isEncAvailable = safeStorage.isEncryptionAvailable();
+        } catch {
+          isEncAvailable = false;
+        }
+
+        if (isEncAvailable) {
+          try {
+            toSave.encryptedToken = safeStorage.encryptString(cleanToken).toString('base64');
+            this.tokenLocked = false;
+          } catch (e) {
+            console.error('[StoreService] Не удалось зашифровать токен через DPAPI:', e);
+            if (rawConfig.encryptedToken) {
+              toSave.encryptedToken = rawConfig.encryptedToken;
+            }
+          }
+        } else {
+          console.error('[StoreService] DPAPI недоступно — запись токена в plaintext запрещена.');
+          if (rawConfig.encryptedToken) {
+            toSave.encryptedToken = rawConfig.encryptedToken;
+          }
+        }
+      } else {
+        delete toSave.encryptedToken;
+        this.tokenLocked = false;
+        this.config.token = '';
+      }
+    } else {
+      if (rawConfig.encryptedToken) {
+        toSave.encryptedToken = rawConfig.encryptedToken;
       }
     }
 
+    delete toSave.token;
+
     try {
-      fs.writeFileSync(this.configFile, JSON.stringify(toSave, null, 2), 'utf-8');
+      this.atomicWriteJson(this.configFile, toSave);
     } catch (e) {
       console.error('[StoreService] Ошибка записи config.json:', e);
     }
@@ -152,12 +221,22 @@ export class StoreService {
     return this.getConfig();
   }
 
+  private isTemplate(x: any): x is QuickTemplate {
+    return (
+      x &&
+      typeof x.id === 'string' &&
+      typeof x.title === 'string' &&
+      typeof x.category === 'string' &&
+      typeof x.text === 'string'
+    );
+  }
+
   private loadTemplates(): QuickTemplate[] {
     if (fs.existsSync(this.templatesFile)) {
       try {
         const raw = fs.readFileSync(this.templatesFile, 'utf-8');
         const list = JSON.parse(raw);
-        if (Array.isArray(list) && list.length > 0) {
+        if (Array.isArray(list) && list.every((t) => this.isTemplate(t)) && list.length > 0) {
           return list;
         }
       } catch (e) {
@@ -176,7 +255,7 @@ export class StoreService {
   public saveTemplates(templates: QuickTemplate[]): QuickTemplate[] {
     this.templates = templates;
     try {
-      fs.writeFileSync(this.templatesFile, JSON.stringify(templates, null, 2), 'utf-8');
+      this.atomicWriteJson(this.templatesFile, templates);
     } catch (e) {
       console.error('[StoreService] Ошибка записи templates.json:', e);
     }
@@ -223,7 +302,7 @@ export class StoreService {
     const current = this.getActivityEvents();
     const updated = [event, ...current.slice(0, 299)];
     try {
-      fs.writeFileSync(this.activityFile, JSON.stringify(updated, null, 2), 'utf-8');
+      this.atomicWriteJson(this.activityFile, updated);
     } catch (e) {
       console.error('[StoreService] Ошибка записи activity.json:', e);
     }
@@ -239,7 +318,7 @@ export class StoreService {
       return item;
     });
     try {
-      fs.writeFileSync(this.activityFile, JSON.stringify(updated, null, 2), 'utf-8');
+      this.atomicWriteJson(this.activityFile, updated);
     } catch (e) {
       console.error('[StoreService] Ошибка обновления статуса read в activity.json:', e);
     }
@@ -254,7 +333,7 @@ export class StoreService {
       return item;
     });
     try {
-      fs.writeFileSync(this.activityFile, JSON.stringify(updated, null, 2), 'utf-8');
+      this.atomicWriteJson(this.activityFile, updated);
     } catch (e) {
       console.error('[StoreService] Ошибка обновления статуса read в activity.json:', e);
     }
@@ -263,7 +342,7 @@ export class StoreService {
 
   public clearActivity(): void {
     try {
-      fs.writeFileSync(this.activityFile, JSON.stringify([], null, 2), 'utf-8');
+      this.atomicWriteJson(this.activityFile, []);
     } catch (e) {
       console.error('[StoreService] Ошибка очистки activity.json:', e);
     }

@@ -39,7 +39,8 @@ export const App: React.FC = () => {
         setConfig(cfg);
 
         // Если токен или ID группы не настроены - открываем онбординг
-        if (!cfg.token || !cfg.groupId) {
+        const hasValidAuth = Boolean((cfg.hasToken || cfg.token) && cfg.groupId);
+        if (!hasValidAuth) {
           setIsOnboardingOpen(true);
         } else {
           loadConversations();

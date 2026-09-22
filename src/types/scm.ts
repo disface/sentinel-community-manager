@@ -3,7 +3,8 @@ export interface AppConfig {
   groupName?: string;
   groupScreenName?: string;
   groupPhoto?: string;
-  token: string;
+  token?: string;
+  hasToken?: boolean;
   themeAccent: string;
   autoLaunch: boolean;
   dndMode: boolean;

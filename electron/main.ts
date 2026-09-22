@@ -19,21 +19,22 @@ const userDataPath = path.join(appRoot, 'data');
 const sessionDataPath = path.join(userDataPath, 'session');
 const crashesPath = path.join(userDataPath, 'crashes');
 const logsPath = path.join(userDataPath, 'logs');
-
+let effectiveRoot = appRoot;
 try {
   if (!fs.existsSync(userDataPath)) {
     fs.mkdirSync(userDataPath, { recursive: true });
   }
+  fs.accessSync(userDataPath, fs.constants.W_OK);
+  // Перенаправляем системные пути Electron в локальный каталог data
+  app.setPath('appData', userDataPath);
+  app.setPath('userData', userDataPath);
+  app.setPath('sessionData', sessionDataPath);
+  app.setPath('crashDumps', crashesPath);
+  app.setPath('logs', logsPath);
 } catch (e) {
-  console.warn('[Main] Error creating userData dir:', e);
+  console.warn('[Main] data/ недоступна для записи, fallback на системный userData:', e);
+  effectiveRoot = app.getPath('userData');
 }
-
-// Перенаправляем все системные пути Electron в локальный каталог data
-app.setPath('appData', userDataPath);
-app.setPath('userData', userDataPath);
-app.setPath('sessionData', sessionDataPath);
-app.setPath('crashDumps', crashesPath);
-app.setPath('logs', logsPath);
 
 // AppUserModelId для Windows 10/11 Toast notifications
 app.setAppUserModelId('com.sentinel.communitymanager');
@@ -43,17 +44,15 @@ const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
   console.log('[Main] Вторая копия SCM обнаружена, завершаем процесс.');
   app.quit();
-  process.exit(0);
 }
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let isQuitting = false;
 
-const storeService = new StoreService(appRoot);
-let config = storeService.getConfig();
-
-const vkService = new VkService(config.groupId, config.token);
+let storeService: StoreService;
+let config: AppConfig;
+let vkService: VkService;
 
 app.on('second-instance', () => {
   if (mainWindow) {
@@ -65,7 +64,9 @@ app.on('second-instance', () => {
 
 app.on('before-quit', () => {
   isQuitting = true;
-  vkService.stop();
+  if (vkService) {
+    vkService.stop();
+  }
 });
 
 function getIconPath(): string {
@@ -82,6 +83,26 @@ function getIconPath(): string {
   const iconPng = path.join(__dirname, '../build/icon.png');
   if (fs.existsSync(iconPng)) return iconPng;
   return '';
+}
+
+function setupSession() {
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    const responseHeaders = details.responseHeaders || {};
+    if (/(^|\.)vk(video)?\.(com|ru)\//.test(details.url) && /video_ext\.php/.test(details.url)) {
+      delete responseHeaders['x-frame-options'];
+      delete responseHeaders['X-Frame-Options'];
+    }
+    responseHeaders['Content-Security-Policy'] = [
+      "default-src 'self' file: data:; " +
+      "img-src 'self' file: data: https: blob:; " +
+      "media-src 'self' file: data: https: blob:; " +
+      "frame-src https://vk.com https://*.vk.com https://*.vkvideo.ru; " +
+      "connect-src 'self' https://api.vk.com https://*.vk.com; " +
+      "style-src 'self' 'unsafe-inline'; " +
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
+    ];
+    callback({ cancel: false, responseHeaders });
+  });
 }
 
 function createWindow() {
@@ -104,7 +125,7 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      sandbox: true,
     },
   });
 
@@ -131,13 +152,18 @@ function createWindow() {
     return { action: 'deny' };
   });
 
-  // Разрешаем встраивание официального плеера видео ВКонтакте (video_ext.php) внутри Electron
-  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
-    const responseHeaders = details.responseHeaders || {};
-    delete responseHeaders['x-frame-options'];
-    delete responseHeaders['X-Frame-Options'];
-    callback({ cancel: false, responseHeaders });
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    const isLocalFile = url.startsWith('file://');
+    const isDev = process.env.VITE_DEV_SERVER_URL && url.startsWith(process.env.VITE_DEV_SERVER_URL);
+    if (!isLocalFile && !isDev) {
+      event.preventDefault();
+      if (/^https?:\/\//.test(url)) {
+        shell.openExternal(url);
+      }
+    }
   });
+
+  mainWindow.webContents.on('will-attach-webview', (e) => e.preventDefault());
 
   mainWindow.on('close', (event) => {
     if (!isQuitting) {
@@ -481,26 +507,26 @@ function setupVkEvents() {
 
 powerMonitor.on('suspend', () => {
   console.log('[Power] ПК переходит в сон. Останавливаем Long Poll...');
-  vkService.stop();
+  if (vkService) vkService.stop();
 });
 
 powerMonitor.on('resume', () => {
-  console.log('[Power] ПК проснулся. Перезапуск Long Poll через 3 секунды...');
-  setTimeout(() => {
-    vkService.restart();
-  }, 3000);
+  console.log('[Power] ПК проснулся. Возобновляем работу Long Poll...');
+  if (vkService) vkService.onSystemResume();
 });
 
 function setupIpcHandlers() {
-  ipcMain.handle('config:get', () => storeService.getConfig());
+  ipcMain.handle('config:get', () => storeService.getConfigForRenderer());
   ipcMain.handle('config:save', (_, newCfg: Partial<AppConfig>) => {
     config = storeService.saveConfig(newCfg);
     if (newCfg.autoLaunch !== undefined) {
       updateAutoLaunch(config.autoLaunch);
     }
-    vkService.updateCredentials(config.groupId, config.token);
+    if (config.token) {
+      vkService.updateCredentials(config.groupId, config.token);
+    }
     updateTrayMenu();
-    return config;
+    return storeService.getConfigForRenderer();
   });
 
   ipcMain.handle('community:validate', async (_, groupIdOrScreenName: string, token: string) => {
@@ -716,6 +742,15 @@ function setupIpcHandlers() {
 }
 
 app.whenReady().then(() => {
+  if (!gotTheLock) return;
+
+  setupSession();
+
+  storeService = new StoreService(effectiveRoot);
+  config = storeService.getConfig();
+
+  vkService = new VkService(config.groupId, config.token || '');
+
   setupIpcHandlers();
   setupVkEvents();
   createWindow();
@@ -735,5 +770,7 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
-  // Окно работает в трее
+  if (process.platform !== 'darwin') {
+    // В Windows приложение продолжает работу в системном трее
+  }
 });

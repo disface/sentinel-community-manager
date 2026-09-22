@@ -49,14 +49,41 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [activeMediaUrl, setActiveMediaUrl] = useState<string | null>(null);
   const [hoveredMessageCmid, setHoveredMessageCmid] = useState<number | null>(null);
+  const [isSending, setIsSending] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const atBottomRef = useRef(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  const handleListScroll = () => {
+    const el = listRef.current;
+    if (!el) return;
+    atBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+  };
+
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (atBottomRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages]);
+
+  useEffect(() => {
+    atBottomRef.current = true;
+    messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
+  }, [conversation?.peerId]);
+
+  useEffect(() => {
+    if (!activeMediaUrl) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setActiveMediaUrl(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [activeMediaUrl]);
 
   if (!conversation) {
     return (
@@ -76,13 +103,21 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
   const handleSend = async () => {
     const text = inputText.trim();
-    if (!text) return;
-    setInputText('');
+    if (!text || isSending) return;
+    setIsSending(true);
+    setSendError(null);
     const replyId = replyingTo?.conversation_message_id || replyingTo?.id;
-    setReplyingTo(null);
-    await onSendMessage(text, replyId);
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
+    try {
+      await onSendMessage(text, replyId);
+      setInputText('');
+      setReplyingTo(null);
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+      }
+    } catch (err: any) {
+      setSendError(err?.message || 'Не удалось отправить сообщение');
+    } finally {
+      setIsSending(false);
     }
   };
 
@@ -93,10 +128,34 @@ export const ChatView: React.FC<ChatViewProps> = ({
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      onUploadImage(e.target.files[0]);
-      e.target.value = '';
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setSendError('Можно прикреплять только изображения.');
+      return;
+    }
+    if (file.size > 25 * 1024 * 1024) {
+      setSendError('Размер изображения превышает 25 МБ.');
+      return;
+    }
+    setIsUploading(true);
+    setSendError(null);
+    try {
+      await onUploadImage(file);
+    } catch (err: any) {
+      setSendError(err?.message || 'Не удалось загрузить изображение');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInputText(e.target.value);
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 128)}px`;
     }
   };
 
@@ -167,7 +226,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
       </div>
 
       {/* Список сообщений */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+      <div ref={listRef} onScroll={handleListScroll} className="flex-1 overflow-y-auto p-4 space-y-3">
         {isLoading && messages.length === 0 ? (
           <div className="flex items-center justify-center h-full text-xs text-surface-500">
             Загрузка сообщений...
@@ -250,11 +309,11 @@ export const ChatView: React.FC<ChatViewProps> = ({
                         </div>
                       );
                     }
-                    if (att.type === 'audio_message' && att.audio_message) {
+                    if (att.type === 'audio_message' && att.audio_message && (att.audio_message.link_mp3 || att.audio_message.link_ogg)) {
                       return (
                         <AudioPlayer
                           key={attIdx}
-                          src={att.audio_message.link_mp3 || att.audio_message.link_ogg}
+                          src={(att.audio_message.link_mp3 || att.audio_message.link_ogg)!}
                           duration={att.audio_message.duration}
                           waveform={att.audio_message.waveform}
                         />
@@ -284,7 +343,9 @@ export const ChatView: React.FC<ChatViewProps> = ({
                           </svg>
                           <div className="min-w-0">
                             <div className="font-semibold truncate text-[11px]">{att.doc.title}</div>
-                            <div className="text-[10px] opacity-70">{(att.doc.size / 1024 / 1024).toFixed(1)} МБ</div>
+                            <div className="text-[10px] opacity-70">
+                              {att.doc.size ? `${(att.doc.size / 1024 / 1024).toFixed(1)} МБ` : ''}
+                            </div>
                           </div>
                         </div>
                       );
@@ -368,6 +429,14 @@ export const ChatView: React.FC<ChatViewProps> = ({
         </div>
       )}
 
+      {/* Ошибка отправки */}
+      {sendError && (
+        <div className="mx-3 mt-2 p-2 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-center justify-between animate-fadeIn">
+          <span>{sendError}</span>
+          <button onClick={() => setSendError(null)} className="text-rose-400 hover:text-white ml-2 text-sm font-bold">✕</button>
+        </div>
+      )}
+
       {/* Поле ввода сообщения */}
       <div className="p-3 bg-surface-900 border-t border-surface-800 flex items-end gap-2 relative">
         {/* Кнопка вложений */}
@@ -380,12 +449,17 @@ export const ChatView: React.FC<ChatViewProps> = ({
         />
         <button
           onClick={() => fileInputRef.current?.click()}
-          className="p-2.5 text-surface-400 hover:text-white rounded-xl hover:bg-surface-800 transition-colors"
-          title="Прикрепить изображение"
+          disabled={isUploading}
+          className="p-2.5 text-surface-400 hover:text-white rounded-xl hover:bg-surface-800 transition-colors disabled:opacity-40"
+          title={isUploading ? 'Загрузка изображения...' : 'Прикрепить изображение'}
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-          </svg>
+          {isUploading ? (
+            <span className="w-5 h-5 flex items-center justify-center text-accent animate-pulse text-xs font-bold">...</span>
+          ) : (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+            </svg>
+          )}
         </button>
 
         {/* Кнопка смайлов */}
@@ -403,7 +477,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
         <textarea
           ref={textareaRef}
           value={inputText}
-          onChange={(e) => setInputText(e.target.value)}
+          onChange={handleTextChange}
           onKeyDown={handleKeyDown}
           placeholder="Напишите ответ... (Enter для отправки, Shift+Enter для новой строки)"
           rows={1}
@@ -413,13 +487,20 @@ export const ChatView: React.FC<ChatViewProps> = ({
         {/* Кнопка отправки */}
         <button
           onClick={handleSend}
-          disabled={!inputText.trim()}
+          disabled={!inputText.trim() || isSending}
           className="p-2.5 bg-accent hover:bg-accent-hover text-white rounded-xl transition-all shadow-md active:scale-95 disabled:opacity-40 disabled:pointer-events-none"
           title="Отправить сообщение"
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-          </svg>
+          {isSending ? (
+            <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+            </svg>
+          ) : (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+            </svg>
+          )}
         </button>
 
         {/* Пикер эмодзи */}

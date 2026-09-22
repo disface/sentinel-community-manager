@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { AppConfig } from '../types/scm';
 import { useTheme } from '../theme/ThemeContext';
 
@@ -28,32 +28,47 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleSelectFolder = async () => {
-    if (!window.scmAPI?.selectFolder) return;
-    const folder = await window.scmAPI.selectFolder();
-    if (folder) {
-      setDownloadDir(folder);
-      const updated = await window.scmAPI.saveConfig({ downloadDir: folder });
+  const volumeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const persist = async (patch: Partial<AppConfig>) => {
+    try {
+      if (!window.scmAPI?.saveConfig) return;
+      const updated = await window.scmAPI.saveConfig(patch);
       onConfigUpdated(updated);
+    } catch (err) {
+      console.error('[Settings] Ошибка сохранения настроек:', err);
     }
   };
 
-  const handleToggleAutoLaunch = async (val: boolean) => {
+  const handleSelectFolder = async () => {
+    if (!window.scmAPI?.selectFolder) return;
+    try {
+      const folder = await window.scmAPI.selectFolder();
+      if (folder) {
+        setDownloadDir(folder);
+        persist({ downloadDir: folder });
+      }
+    } catch (err) {
+      console.error('[Settings] Ошибка выбора папки:', err);
+    }
+  };
+
+  const handleToggleAutoLaunch = (val: boolean) => {
     setAutoLaunch(val);
-    const updated = await window.scmAPI.saveConfig({ autoLaunch: val });
-    onConfigUpdated(updated);
+    persist({ autoLaunch: val });
   };
 
-  const handleToggleSound = async (val: boolean) => {
+  const handleToggleSound = (val: boolean) => {
     setSoundEnabled(val);
-    const updated = await window.scmAPI.saveConfig({ soundEnabled: val });
-    onConfigUpdated(updated);
+    persist({ soundEnabled: val });
   };
 
-  const handleChangeVolume = async (val: number) => {
+  const handleChangeVolume = (val: number) => {
     setVolume(val);
-    const updated = await window.scmAPI.saveConfig({ volume: val });
-    onConfigUpdated(updated);
+    if (volumeTimer.current) clearTimeout(volumeTimer.current);
+    volumeTimer.current = setTimeout(() => {
+      persist({ volume: val });
+    }, 300);
   };
 
   const handleChangeUiScale = (factor: number) => {
@@ -61,7 +76,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     if (window.scmAPI?.setZoomFactor) {
       window.scmAPI.setZoomFactor(factor);
     }
-    window.scmAPI.saveConfig({ uiScale: factor }).then(onConfigUpdated).catch(console.error);
+    persist({ uiScale: factor });
   };
 
   return (
@@ -144,14 +159,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <div className="p-3.5 bg-surface-850 rounded-xl border border-surface-800 space-y-3.5">
             <div className="flex items-center justify-between">
               <div>
-                <div className="font-medium text-white text-xs">Автозапуск с Windows</div>
+                <div className="font-medium text-white text-xs">Автозапуск при старте системы</div>
                 <div className="text-[11px] text-surface-400">Запуск в фоновом режиме в системном трее</div>
               </div>
               <input
                 type="checkbox"
                 checked={autoLaunch}
                 onChange={(e) => handleToggleAutoLaunch(e.target.checked)}
-                className="w-4 h-4 rounded text-accent focus:ring-0 cursor-pointer"
+                className="w-4 h-4 rounded accent-indigo-500 focus:ring-0 cursor-pointer"
               />
             </div>
 
@@ -164,7 +179,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 type="checkbox"
                 checked={soundEnabled}
                 onChange={(e) => handleToggleSound(e.target.checked)}
-                className="w-4 h-4 rounded text-accent focus:ring-0 cursor-pointer"
+                className="w-4 h-4 rounded accent-indigo-500 focus:ring-0 cursor-pointer"
               />
             </div>
 

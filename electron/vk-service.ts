@@ -21,8 +21,12 @@ export class VkService extends EventEmitter {
   private lpTs: string = '';
 
   // Дедупликация каскадных реакций VK (лайк на пост + вложенные фото/видео)
-  private lastLikeTimestamps: Map<number, number> = new Map();
+  private lastLikeTimestamps: Map<string, number> = new Map();
   private lastLikeObjectTypes: Map<number, string> = new Map();
+
+  // Дедупликация событий Long Poll
+  private seenEventIds: Set<string> = new Set();
+  private seenOrder: string[] = [];
 
   constructor(groupId: number, token: string) {
     super();
@@ -30,13 +34,40 @@ export class VkService extends EventEmitter {
     this.token = token;
   }
 
+  private markSeen(id: string): boolean {
+    if (this.seenEventIds.has(id)) return false;
+    this.seenEventIds.add(id);
+    this.seenOrder.push(id);
+    if (this.seenOrder.length > 2000) {
+      const old = this.seenOrder.shift()!;
+      this.seenEventIds.delete(old);
+    }
+    return true;
+  }
+
   public updateCredentials(groupId: number, token: string) {
     const changed = this.groupId !== groupId || this.token !== token;
     this.groupId = groupId;
     this.token = token;
-    if (changed && this.isRunning) {
-      this.restart();
+    if (changed) {
+      if (this.isRunning) {
+        this.restart();
+      } else if (this.groupId && this.token) {
+        this.start();
+      }
     }
+  }
+
+  public onSystemResume() {
+    if (!this.isRunning) return;
+    console.log('[VkService] ПК проснулся: сброс сетевого запроса и рестарт Long Poll');
+    try {
+      this.abortController?.abort();
+    } catch {}
+    this.lpServer = '';
+    this.lpKey = '';
+    this.lpTs = '';
+    this.restart();
   }
 
   private async callApi(method: string, params: Record<string, any> = {}): Promise<any> {
@@ -112,6 +143,10 @@ export class VkService extends EventEmitter {
       screen_name: u.screen_name || `id${u.id}`,
       can_write: u.can_write_private_message === 1,
     };
+    if (this.userCache.size > 500) {
+      const firstKey = this.userCache.keys().next().value;
+      if (firstKey !== undefined) this.userCache.delete(firstKey);
+    }
     this.userCache.set(userId, profile);
     return profile;
   }
@@ -752,6 +787,7 @@ export class VkService extends EventEmitter {
 
         const data = await res.json();
         retryAttempt = 0;
+        this.emit('network-status', { connected: true });
 
         if (data.failed) {
           if (data.failed === 1) {
@@ -760,25 +796,33 @@ export class VkService extends EventEmitter {
           } else if (data.failed === 2) {
             const srv = await this.callApi('groups.getLongPollServer', { group_id: this.groupId });
             this.lpKey = srv.key;
+            this.lpServer = srv.server;
+            await new Promise((r) => setTimeout(r, 1000));
             continue;
           } else if (data.failed === 3) {
             await this.fetchLpServer();
+            await new Promise((r) => setTimeout(r, 1000));
             continue;
           } else if (data.failed === 4) {
+            console.error(`[VkService] failed=4: неподдерживаемая версия API (min=${data.min_version}, max=${data.max_version})`);
             this.emit('error', 'Неверная версия Long Poll API (нужна 5.199)');
             this.stop();
             break;
           }
         }
 
-        if (data.ts) {
-          this.lpTs = data.ts;
-        }
-
         if (data.updates && Array.isArray(data.updates)) {
           for (const update of data.updates) {
-            await this.handleUpdate(update);
+            try {
+              await this.handleUpdate(update);
+            } catch (e) {
+              console.error('[VkService] Ошибка обработки update:', update?.type, e);
+            }
           }
+        }
+
+        if (data.ts) {
+          this.lpTs = data.ts;
         }
       } catch (err: any) {
         if (!this.isRunning) break;
@@ -801,6 +845,10 @@ export class VkService extends EventEmitter {
 
     if (type === 'message_new') {
       const msg = obj.message;
+      if (!msg) return;
+      const msgKey = `msg:${msg.peer_id}:${msg.conversation_message_id ?? msg.id}`;
+      if (!this.markSeen(msgKey)) return;
+
       const user = await this.getUser(msg.from_id);
 
       const parsedMsg: VKMessage = {
@@ -826,6 +874,9 @@ export class VkService extends EventEmitter {
     }
 
     if (type === 'message_reply') {
+      const replyKey = `reply:${obj.peer_id}:${obj.conversation_message_id ?? obj.id}`;
+      if (!this.markSeen(replyKey)) return;
+
       const parsedMsg: VKMessage = {
         id: obj.id,
         peer_id: obj.peer_id,
@@ -858,6 +909,9 @@ export class VkService extends EventEmitter {
 
     if (type === 'message_edit') {
       const msg = obj.message || obj;
+      const editKey = `edit:${msg.peer_id || obj.peer_id}:${msg.conversation_message_id || obj.conversation_message_id || msg.id || obj.id}:${msg.date || obj.date}`;
+      if (!this.markSeen(editKey)) return;
+
       const parsedMsg: VKMessage = {
         id: msg.id || obj.id,
         peer_id: msg.peer_id || obj.peer_id,
@@ -873,6 +927,9 @@ export class VkService extends EventEmitter {
     }
 
     if (type === 'message_reaction_event' || type === 'callback_message_reaction_event') {
+      const reactKey = `react:${obj.peer_id}:${obj.cmid}:${obj.reacted_id}:${obj.reaction_id || 0}`;
+      if (!this.markSeen(reactKey)) return;
+
       this.emit('message_reaction', {
         reacted_id: obj.reacted_id,
         peer_id: obj.peer_id,
@@ -920,15 +977,20 @@ export class VkService extends EventEmitter {
       const likerId = obj.liker_id;
       const objectType = obj.object_type || '';
       const now = Date.now();
-      const lastLike = this.lastLikeTimestamps.get(likerId);
+      const dedupKey = `${likerId}:${objectType}:${obj.object_id ?? ''}`;
+      const lastLike = this.lastLikeTimestamps.get(dedupKey);
 
       // Дедупликация каскадных лайков VK в окне 8 секунд от одного пользователя
       if (lastLike && (now - lastLike) < 8000) {
-        console.log(`[VkService] Агрегирован каскадный лайк от пользователя ${likerId} (${objectType})`);
+        console.log(`[VkService] Агрегирован каскадный лайк ${dedupKey}`);
         return;
       }
-      this.lastLikeTimestamps.set(likerId, now);
-      this.lastLikeObjectTypes.set(likerId, objectType);
+      this.lastLikeTimestamps.set(dedupKey, now);
+      if (this.lastLikeTimestamps.size > 500) {
+        for (const [k, t] of this.lastLikeTimestamps) {
+          if (now - t > 60000) this.lastLikeTimestamps.delete(k);
+        }
+      }
 
       const user = await this.getUser(likerId);
       let detailsText = 'Оценил публикацию';
@@ -972,6 +1034,8 @@ export class VkService extends EventEmitter {
 
     if (type === 'wall_reply_new') {
       const user = await this.getUser(obj.from_id);
+      const commentText = obj.text || (obj.attachments?.length ? '[Вложение]' : '');
+      const preview = commentText.length > 50 ? commentText.slice(0, 50) + '...' : commentText;
       const activity: ActivityEvent = {
         id: `comment-${obj.id}-${Date.now()}`,
         type: 'comment',
@@ -979,7 +1043,7 @@ export class VkService extends EventEmitter {
         userId: obj.from_id,
         userName: `${user.first_name} ${user.last_name}`.trim(),
         userPhoto: user.photo_100,
-        details: `Комментарий: «${obj.text.length > 50 ? obj.text.slice(0, 50) + '...' : obj.text}»`,
+        details: `Комментарий: «${preview}»`,
         raw: obj,
         read: false,
       };
