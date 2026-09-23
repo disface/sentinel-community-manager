@@ -13,7 +13,9 @@ interface ChatViewProps {
   onSendMessage: (text: string, replyTo?: number) => Promise<void>;
   onSendSticker?: (stickerId: number) => Promise<void>;
   onUploadImage: (file: File) => Promise<void>;
+  groupId?: number;
   onSendReaction: (cmid: number, reactionId: number) => Promise<void>;
+  onDeleteReaction?: (cmid: number) => Promise<void>;
   onDeleteConversation: (peerId: number) => Promise<void>;
   onBanUser: (userId: number, comment?: string) => Promise<void>;
   onOpenTemplatesModal: () => void;
@@ -27,7 +29,9 @@ export const ChatView: React.FC<ChatViewProps> = ({
   onSendMessage,
   onSendSticker,
   onUploadImage,
+  groupId,
   onSendReaction,
+  onDeleteReaction,
   onDeleteConversation,
   onBanUser,
   onOpenTemplatesModal,
@@ -41,6 +45,20 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [isSending, setIsSending] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+
+  const handleToggleReaction = async (m: VKMessage, reactionId: number, hasOurReaction: boolean) => {
+    const cmid = m.conversation_message_id || m.id;
+    if (!cmid) return;
+    try {
+      if (hasOurReaction) {
+        if (onDeleteReaction) await onDeleteReaction(cmid);
+      } else {
+        if (onSendReaction) await onSendReaction(cmid, reactionId);
+      }
+    } catch (e) {
+      console.warn('Reaction error:', e);
+    }
+  };
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -242,22 +260,31 @@ export const ChatView: React.FC<ChatViewProps> = ({
                   <div
                     className={`absolute -top-7 ${
                       isOut ? 'right-0' : 'left-0'
-                    } z-20 bg-surface-900 border border-surface-700 px-2 py-1 rounded-xl shadow-xl flex items-center gap-1.5 animate-fadeIn max-w-[calc(100vw-48px)] overflow-x-auto`}
+                    } z-20 bg-surface-900 border border-surface-700 px-2 py-1 rounded-xl shadow-xl flex items-center gap-1.5 animate-fadeIn max-w-[calc(100vw-48px)] overflow-x-auto select-none`}
                   >
-                    {QUICK_REACTIONS.map((r) => (
-                      <button
-                        key={r.id}
-                        onClick={() => onSendReaction(cmid, r.id)}
-                        className="hover:scale-125 transition-transform text-sm p-0.5"
-                        title={r.emoji}
-                      >
-                        {r.emoji}
-                      </button>
-                    ))}
+                    {QUICK_REACTIONS.map((r) => {
+                      const alreadyHas = m.reactions?.some(
+                        (rx) => rx.reaction_id === r.id && groupId && rx.user_ids?.includes(-groupId)
+                      );
+                      return (
+                        <button
+                          key={r.id}
+                          onClick={() => handleToggleReaction(m, r.id, Boolean(alreadyHas))}
+                          className={`transition-transform text-sm p-0.5 rounded cursor-pointer ${
+                            alreadyHas
+                              ? 'scale-125 bg-accent/25 ring-1 ring-accent'
+                              : 'hover:scale-125'
+                          }`}
+                          title={`Реакция ${r.emoji} (нажмите, чтобы ${alreadyHas ? 'снять' : 'поставить'})`}
+                        >
+                          {r.emoji}
+                        </button>
+                      );
+                    })}
                     <div className="w-px h-3.5 bg-surface-800 mx-0.5 shrink-0" />
                     <button
                       onClick={() => setReplyingTo(m)}
-                      className="text-surface-400 hover:text-white p-0.5"
+                      className="text-surface-400 hover:text-white p-0.5 cursor-pointer"
                       title="Ответить на сообщение"
                     >
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -344,17 +371,25 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
                   {/* Реакции под сообщением */}
                   {m.reactions && m.reactions.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-2">
+                    <div className="flex flex-wrap gap-1 mt-2 select-none">
                       {m.reactions.map((r, rIdx) => {
                         const emoji = VK_REACTION_MAP[r.reaction_id] || '👍';
+                        const hasOurReaction = Boolean(
+                          groupId && r.user_ids?.includes(-groupId)
+                        );
                         return (
                           <span
                             key={rIdx}
-                            onClick={() => onSendReaction(cmid, r.reaction_id)}
-                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-surface-900/80 border border-surface-700 text-[11px] cursor-pointer hover:scale-105 transition-transform"
+                            onClick={() => handleToggleReaction(m, r.reaction_id, hasOurReaction)}
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] cursor-pointer transition-all ${
+                              hasOurReaction
+                                ? 'bg-accent/25 border border-accent text-white font-semibold scale-105 shadow-sm'
+                                : 'bg-surface-900/80 hover:bg-surface-800 border border-surface-700 text-surface-300 hover:scale-105'
+                            }`}
+                            title={`Реакция ${emoji}: ${r.count} (нажмите, чтобы ${hasOurReaction ? 'снять' : 'поставить'})`}
                           >
                             <span>{emoji}</span>
-                            <span className="font-semibold text-surface-300">{r.count}</span>
+                            <span className={`font-semibold ${hasOurReaction ? 'text-white' : 'text-surface-300'}`}>{r.count}</span>
                           </span>
                         );
                       })}

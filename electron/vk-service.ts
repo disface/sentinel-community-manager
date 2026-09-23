@@ -927,11 +927,9 @@ export class VkService extends EventEmitter {
     }
 
     if (type === 'message_reaction_event' || type === 'callback_message_reaction_event') {
-      const reactKey = `react:${obj.peer_id}:${obj.cmid}:${obj.reacted_id}:${obj.reaction_id || 0}`;
-      if (!this.markSeen(reactKey)) return;
-
+      const reactedId = Number(obj.reacted_id ?? obj.user_id ?? obj.from_id ?? 0);
       this.emit('message_reaction', {
-        reacted_id: obj.reacted_id,
+        reacted_id: reactedId,
         peer_id: obj.peer_id,
         cmid: obj.cmid,
         reaction_id: obj.reaction_id || 0,

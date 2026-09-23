@@ -175,17 +175,45 @@ export const App: React.FC = () => {
         setMessages((prev) =>
           prev.map((m) => {
             const cmid = m.conversation_message_id || m.id;
-            if (cmid === data.cmid) {
-              const reactions = m.reactions ? [...m.reactions] : [];
-              const foundIdx = reactions.findIndex((r) => r.reaction_id === data.reaction_id);
-              if (foundIdx >= 0) {
-                reactions[foundIdx] = { ...reactions[foundIdx], count: reactions[foundIdx].count + 1 };
+            if (cmid !== data.cmid) return m;
+
+            let existingReactions = m.reactions ? [...m.reactions] : [];
+
+            // 1. Удаляем пользователя из предыдущей реакции (если он уже реагировал)
+            existingReactions = existingReactions
+              .map((r) => {
+                if (r.user_ids?.includes(data.reacted_id)) {
+                  const newUserIds = r.user_ids.filter((id) => id !== data.reacted_id);
+                  return { ...r, count: newUserIds.length, user_ids: newUserIds };
+                }
+                return r;
+              })
+              .filter((r) => r.count > 0);
+
+            // 2. Если реакция добавляется/обновляется (reaction_id > 0)
+            if (data.reaction_id > 0) {
+              const targetIdx = existingReactions.findIndex((r) => r.reaction_id === data.reaction_id);
+              if (targetIdx >= 0) {
+                const target = existingReactions[targetIdx];
+                const userIds = target.user_ids ? [...target.user_ids] : [];
+                if (!userIds.includes(data.reacted_id)) {
+                  userIds.push(data.reacted_id);
+                }
+                existingReactions[targetIdx] = {
+                  ...target,
+                  count: userIds.length,
+                  user_ids: userIds,
+                };
               } else {
-                reactions.push({ reaction_id: data.reaction_id, count: 1 });
+                existingReactions.push({
+                  reaction_id: data.reaction_id,
+                  count: 1,
+                  user_ids: [data.reacted_id],
+                });
               }
-              return { ...m, reactions };
             }
-            return m;
+
+            return { ...m, reactions: existingReactions };
           })
         );
       }
@@ -261,6 +289,15 @@ export const App: React.FC = () => {
       await window.scmAPI.sendReaction(selectedPeerId, cmid, reactionId);
     } catch (err) {
       console.error('Reaction error:', err);
+    }
+  };
+
+  const handleDeleteReaction = async (cmid: number) => {
+    if (!selectedPeerId || !window.scmAPI?.deleteReaction) return;
+    try {
+      await window.scmAPI.deleteReaction(selectedPeerId, cmid);
+    } catch (err) {
+      console.warn('Delete reaction error:', err);
     }
   };
 
@@ -389,7 +426,9 @@ export const App: React.FC = () => {
               onSendMessage={handleSendMessage}
               onSendSticker={handleSendSticker}
               onUploadImage={handleUploadImage}
+              groupId={config.groupId}
               onSendReaction={handleSendReaction}
+              onDeleteReaction={handleDeleteReaction}
               onDeleteConversation={handleDeleteConversation}
               onBanUser={handleBanUser}
               onOpenTemplatesModal={() => setIsTemplatesOpen(true)}

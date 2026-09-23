@@ -154,6 +154,14 @@ export const QUICK_REACTIONS = [
 export interface MessageReaction {
   reaction_id: number; // 1=❤️, 2=🔥, 3=😂, 4=👍, 5=💩, 6=❓, 7=😭, 8=😡, 9=👎, 10=👌, 11=😄, 12=😏, 13=🙏, 14=😘, 15=😍, 16=🎉
   count: number;
+  user_ids?: number[];
+}
+
+export interface VKReactionEvent {
+  reacted_id: number;
+  peer_id: number;
+  cmid: number;
+  reaction_id: number;
 }
 
 export interface VKMessage {
@@ -263,7 +271,7 @@ export interface ScmAPI {
   onMessageReply: (callback: (data: { message: VKMessage }) => void) => () => void;
   onMessageEdit: (callback: (data: { message: VKMessage }) => void) => () => void;
   onMessageRead: (callback: (data: { peer_id: number; message_id?: number; out_read_id?: number }) => void) => () => void;
-  onReactionUpdate: (callback: (data: any) => void) => () => void;
+  onReactionUpdate: (callback: (data: VKReactionEvent) => void) => () => void;
   onActivity: (callback: (event: ActivityEvent) => void) => () => void;
   onNetworkStatus: (callback: (status: { connected: boolean; error?: string }) => void) => () => void;
   onOpenChat: (callback: (peerId: number) => void) => () => void;
