@@ -120,8 +120,39 @@ export interface ForwardedMessage {
   fwd_messages?: ForwardedMessage[];
 }
 
+export const VK_REACTION_MAP: Record<number, string> = {
+  1: '❤️',
+  2: '🔥',
+  3: '😂',
+  4: '👍',
+  5: '💩',
+  6: '❓',
+  7: '😭',
+  8: '😡',
+  9: '👎',
+  10: '👌',
+  11: '😄',
+  12: '😏',
+  13: '🙏',
+  14: '😘',
+  15: '😍',
+  16: '🎉',
+};
+
+export const QUICK_REACTIONS = [
+  { id: 1, emoji: '❤️' },
+  { id: 2, emoji: '🔥' },
+  { id: 3, emoji: '😂' },
+  { id: 4, emoji: '👍' },
+  { id: 9, emoji: '👎' },
+  { id: 10, emoji: '👌' },
+  { id: 13, emoji: '🙏' },
+  { id: 16, emoji: '🎉' },
+  { id: 15, emoji: '😍' },
+];
+
 export interface MessageReaction {
-  reaction_id: number; // 1=❤️, 2=👍, 3=👎, 4=🔥, 5=👏, 6=😂, 7=💯, 8=🥳
+  reaction_id: number; // 1=❤️, 2=🔥, 3=😂, 4=👍, 5=💩, 6=❓, 7=😭, 8=😡, 9=👎, 10=👌, 11=😄, 12=😏, 13=🙏, 14=😘, 15=😍, 16=🎉
   count: number;
 }
 

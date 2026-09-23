@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ConversationItem, QuickTemplate, VKMessage } from '../types/scm';
+import { ConversationItem, QuickTemplate, VKMessage, QUICK_REACTIONS, VK_REACTION_MAP } from '../types/scm';
 import { AudioPlayer } from './AudioPlayer';
 import { FormattedText } from './FormattedText';
 import { EmojiPicker } from './EmojiPicker';
@@ -18,17 +18,6 @@ interface ChatViewProps {
   onBanUser: (userId: number, comment?: string) => Promise<void>;
   onOpenTemplatesModal: () => void;
 }
-
-const QUICK_REACTIONS = [
-  { id: 1, emoji: '❤️' },
-  { id: 2, emoji: '👍' },
-  { id: 3, emoji: '👎' },
-  { id: 4, emoji: '🔥' },
-  { id: 5, emoji: '👏' },
-  { id: 6, emoji: '😂' },
-  { id: 7, emoji: '💯' },
-  { id: 8, emoji: '🥳' },
-];
 
 export const ChatView: React.FC<ChatViewProps> = ({
   conversation,
@@ -253,9 +242,9 @@ export const ChatView: React.FC<ChatViewProps> = ({
                   <div
                     className={`absolute -top-7 ${
                       isOut ? 'right-0' : 'left-0'
-                    } z-20 bg-surface-900 border border-surface-700 px-2 py-1 rounded-xl shadow-xl flex items-center gap-1.5 animate-fadeIn`}
+                    } z-20 bg-surface-900 border border-surface-700 px-2 py-1 rounded-xl shadow-xl flex items-center gap-1.5 animate-fadeIn max-w-[calc(100vw-48px)] overflow-x-auto`}
                   >
-                    {QUICK_REACTIONS.slice(0, 5).map((r) => (
+                    {QUICK_REACTIONS.map((r) => (
                       <button
                         key={r.id}
                         onClick={() => onSendReaction(cmid, r.id)}
@@ -265,7 +254,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                         {r.emoji}
                       </button>
                     ))}
-                    <div className="w-px h-3.5 bg-surface-800 mx-0.5" />
+                    <div className="w-px h-3.5 bg-surface-800 mx-0.5 shrink-0" />
                     <button
                       onClick={() => setReplyingTo(m)}
                       className="text-surface-400 hover:text-white p-0.5"
@@ -357,14 +346,14 @@ export const ChatView: React.FC<ChatViewProps> = ({
                   {m.reactions && m.reactions.length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-2">
                       {m.reactions.map((r, rIdx) => {
-                        const q = QUICK_REACTIONS.find((qr) => qr.id === r.reaction_id);
+                        const emoji = VK_REACTION_MAP[r.reaction_id] || '👍';
                         return (
                           <span
                             key={rIdx}
                             onClick={() => onSendReaction(cmid, r.reaction_id)}
                             className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-surface-900/80 border border-surface-700 text-[11px] cursor-pointer hover:scale-105 transition-transform"
                           >
-                            <span>{q?.emoji || '👍'}</span>
+                            <span>{emoji}</span>
                             <span className="font-semibold text-surface-300">{r.count}</span>
                           </span>
                         );
