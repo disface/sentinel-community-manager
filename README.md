@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Platform: Windows](https://img.shields.io/badge/Platform-Windows%2010%20%2F%2011-0078D6.svg)](https://microsoft.com)
-[![Release: v1.0.2](https://img.shields.io/badge/Release-v1.0.2-brightgreen.svg)](https://github.com/disface/sentinel-community-manager/releases/tag/v1.0.2)
+[![Release: v1.0.3](https://img.shields.io/badge/Release-v1.0.3-brightgreen.svg)](https://github.com/disface/sentinel-community-manager/releases/tag/v1.0.3)
 [![Electron](https://img.shields.io/badge/Electron-34.x-47848F.svg)](https://www.electronjs.org/)
 [![React](https://img.shields.io/badge/React-19.x-61DAFB.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6.svg)](https://www.typescriptlang.org/)
@@ -51,7 +51,7 @@
 
 ## 🚀 Быстрый старт
 
-1. Скачайте готовый файл **`Sentinel-Community-Manager-Portable.exe`** со страницы [Releases](https://github.com/disface/sentinel-community-manager/releases/latest) (текущая стабильная версия: **v1.0.2**; подробности см. в [CHANGELOG.md](CHANGELOG.md)).
+1. Скачайте готовый файл **`Sentinel-Community-Manager-Portable.exe`** со страницы [Releases](https://github.com/disface/sentinel-community-manager/releases/latest) (текущая стабильная версия: **v1.0.3**; подробности см. в [CHANGELOG.md](CHANGELOG.md)).
 2. Поместите его в любую удобную папку (например, `D:\Apps\SCM`) и запустите.
 3. В открывшемся Мастере настройки укажите:
    - **ID или короткий адрес сообщества** (например, `club12345` или `my_public`).
