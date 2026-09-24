@@ -33,14 +33,14 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({ events, onOpenChat, 
 
   const totalUnread = useMemo(() => deduplicatedEvents.filter((e) => !e.read).length, [deduplicatedEvents]);
   const subUnread = useMemo(() => deduplicatedEvents.filter((e) => !e.read && (e.type === 'join' || e.type === 'leave')).length, [deduplicatedEvents]);
-  const reactionUnread = useMemo(() => deduplicatedEvents.filter((e) => !e.read && (e.type === 'like' || e.type === 'repost')).length, [deduplicatedEvents]);
+  const reactionUnread = useMemo(() => deduplicatedEvents.filter((e) => !e.read && (e.type === 'like' || e.type === 'repost' || e.type === 'reaction')).length, [deduplicatedEvents]);
   const commentUnread = useMemo(() => deduplicatedEvents.filter((e) => !e.read && e.type === 'comment').length, [deduplicatedEvents]);
 
   const filteredEvents = useMemo(() => {
     return deduplicatedEvents.filter((e) => {
       if (filter === 'unread') return !e.read;
       if (filter === 'subscribers') return e.type === 'join' || e.type === 'leave';
-      if (filter === 'reactions') return e.type === 'like' || e.type === 'repost';
+      if (filter === 'reactions') return e.type === 'like' || e.type === 'repost' || e.type === 'reaction';
       if (filter === 'comments') return e.type === 'comment';
       return true;
     });
@@ -78,6 +78,8 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({ events, onOpenChat, 
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
           </svg>
         );
+      case 'reaction':
+        return <span className="text-[11px] leading-none">🔥</span>;
       default:
         return null;
     }
@@ -95,6 +97,8 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({ events, onOpenChat, 
         return <span className="text-[10px] px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-400 border border-sky-500/30 font-semibold whitespace-nowrap">Репост</span>;
       case 'comment':
         return <span className="text-[10px] px-2 py-0.5 rounded-full bg-accent-subtle text-accent border border-accent-border font-semibold whitespace-nowrap">Комментарий</span>;
+      case 'reaction':
+        return <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 font-semibold whitespace-nowrap">Реакция в ЛС</span>;
       default:
         return null;
     }

@@ -481,8 +481,39 @@ function setupVkEvents() {
     mainWindow?.webContents.send('vk:message_read', data);
   });
 
-  vkService.on('message_reaction', (data: any) => {
+  vkService.on('message_reaction', async (data: any) => {
     mainWindow?.webContents.send('vk:reaction-event', data);
+
+    if (config.dndMode) return;
+    if (data.reaction_id > 0 && data.reacted_id !== -config.groupId) {
+      try {
+        const user = await vkService.getUser(data.reacted_id);
+        const senderName = user ? `${user.first_name} ${user.last_name}`.trim() : 'Пользователь';
+        const emojiMap: Record<number, string> = {
+          1: '❤️', 2: '👍', 3: '👎', 4: '🔥', 5: '🎉',
+          6: '😢', 7: '😮', 8: '👏', 9: '🤔', 10: '💩',
+        };
+        const emoji = emojiMap[data.reaction_id] || '🔥';
+
+        const notif = new Notification({
+          title: `Реакция ${emoji} • ${senderName}`,
+          body: `${senderName} поставил ${emoji} на сообщение в диалоге`,
+          silent: !config.soundEnabled,
+        });
+
+        notif.on('click', () => {
+          if (mainWindow) {
+            if (!mainWindow.isVisible()) mainWindow.show();
+            mainWindow.focus();
+            mainWindow.webContents.send('vk:open-chat', data.peer_id);
+          }
+        });
+
+        notif.show();
+      } catch (e) {
+        console.error('[Notification] Error showing reaction notif:', e);
+      }
+    }
   });
 
   vkService.on('activity', (event: ActivityEvent) => {

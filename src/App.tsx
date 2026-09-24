@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { AppConfig, ConversationItem, QuickTemplate, VKMessage, ActivityEvent } from './types/scm';
+import React, { useState, useEffect, useRef } from 'react';
+import { AppConfig, ConversationItem, QuickTemplate, VKMessage, ActivityEvent, VK_REACTION_MAP } from './types/scm';
 import { Header } from './components/Header';
 import { ConversationsList } from './components/ConversationsList';
 import { ChatView } from './components/ChatView';
@@ -16,6 +16,11 @@ export const App: React.FC = () => {
   const [messages, setMessages] = useState<VKMessage[]>([]);
   const [activityEvents, setActivityEvents] = useState<ActivityEvent[]>([]);
   const [templates, setTemplates] = useState<QuickTemplate[]>([]);
+
+  const conversationsRef = useRef(conversations);
+  conversationsRef.current = conversations;
+  const configRef = useRef(config);
+  configRef.current = config;
 
   const [activeTab, setActiveTab] = useState<'chats' | 'activity'>('chats');
   const [isConnected, setIsConnected] = useState(true);
@@ -216,6 +221,25 @@ export const App: React.FC = () => {
             return { ...m, reactions: existingReactions };
           })
         );
+      } else if (configRef.current && data.reaction_id > 0 && data.reacted_id !== -configRef.current.groupId) {
+        // Реакция пришла в фоновый диалог от пользователя
+        const conv = conversationsRef.current.find((c) => c.peerId === data.peer_id);
+        const userName = conv?.user ? `${conv.user.first_name} ${conv.user.last_name}`.trim() : `ID ${data.reacted_id}`;
+        const userPhoto = conv?.user?.photo_100 || '';
+        const emoji = VK_REACTION_MAP[data.reaction_id] || '🔥';
+
+        const newActivity: ActivityEvent = {
+          id: `reaction_${data.peer_id}_${data.cmid}_${data.reacted_id}_${Date.now()}`,
+          type: 'reaction',
+          timestamp: Math.floor(Date.now() / 1000),
+          userId: data.peer_id,
+          userName: userName,
+          userPhoto: userPhoto,
+          details: `Поставил реакцию ${emoji} на сообщение в диалоге`,
+          read: false,
+          raw: data,
+        };
+        setActivityEvents((prev) => [newActivity, ...prev]);
       }
     });
 

@@ -377,6 +377,15 @@ export const ChatView: React.FC<ChatViewProps> = ({
                         const hasOurReaction = Boolean(
                           groupId && r.user_ids?.includes(-groupId)
                         );
+                        const authorNames = r.user_ids?.map((uid) => {
+                          if (groupId && uid === -groupId) return 'Сообщество (Вы)';
+                          if (conversation && (uid === conversation.peerId || uid === conversation.user.id)) {
+                            return `${conversation.user.first_name} ${conversation.user.last_name}`.trim() || 'Клиент';
+                          }
+                          return `Пользователь #${uid}`;
+                        }) || [];
+                        const authorsText = authorNames.length > 0 ? ` (${authorNames.join(', ')})` : '';
+
                         return (
                           <span
                             key={rIdx}
@@ -386,7 +395,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                                 ? 'bg-accent/25 border border-accent text-white font-semibold scale-105 shadow-sm'
                                 : 'bg-surface-900/80 hover:bg-surface-800 border border-surface-700 text-surface-300 hover:scale-105'
                             }`}
-                            title={`Реакция ${emoji}: ${r.count} (нажмите, чтобы ${hasOurReaction ? 'снять' : 'поставить'})`}
+                            title={`Реакция ${emoji}: ${r.count}${authorsText} • Нажмите, чтобы ${hasOurReaction ? 'снять' : 'поставить'}`}
                           >
                             <span>{emoji}</span>
                             <span className={`font-semibold ${hasOurReaction ? 'text-white' : 'text-surface-300'}`}>{r.count}</span>

@@ -202,7 +202,7 @@ export interface ConversationItem {
 
 export interface ActivityEvent {
   id: string;
-  type: 'join' | 'leave' | 'like' | 'repost' | 'comment' | 'message';
+  type: 'join' | 'leave' | 'like' | 'repost' | 'comment' | 'message' | 'reaction';
   timestamp: number;
   userId: number;
   userName: string;
