@@ -198,6 +198,11 @@ export interface ConversationItem {
   out_read?: number;
   in_read_cmid?: number;
   out_read_cmid?: number;
+  lastReaction?: {
+    emoji: string;
+    date: number;
+    authorName?: string;
+  };
 }
 
 export interface ActivityEvent {

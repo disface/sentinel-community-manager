@@ -191,7 +191,16 @@ export const ConversationsList: React.FC<ConversationsListProps> = ({
 
                   <div className="flex items-center justify-between gap-1">
                     <p className={`text-xs truncate ${hasUnread ? 'text-surface-100 font-medium' : 'text-surface-400'}`}>
-                      {item.lastMessage.out && <span className="text-accent font-semibold mr-1">Вы:</span>}
+                      {item.lastReaction && item.lastReaction.date >= (item.lastMessage?.date || 0) ? (
+                        <span className="inline-flex items-center gap-1 text-white font-medium mr-1.5 shrink-0">
+                          <span className="text-xs">{item.lastReaction.emoji}</span>
+                          <span className="text-[10px] text-amber-400 font-semibold">
+                            {item.lastReaction.authorName ? `${item.lastReaction.authorName}:` : 'Реакция:'}
+                          </span>
+                        </span>
+                      ) : (
+                        item.lastMessage.out && <span className="text-accent font-semibold mr-1">Вы:</span>
+                      )}
                       {item.lastMessage.text || '[Вложение]'}
                     </p>
 

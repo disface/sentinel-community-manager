@@ -241,6 +241,31 @@ export const App: React.FC = () => {
         };
         setActivityEvents((prev) => [newActivity, ...prev]);
       }
+
+      // Обновление индикации последней реакции в списке диалогов и перемещение наверх
+      setConversations((prev) => {
+        const idx = prev.findIndex((c) => c.peerId === data.peer_id);
+        if (idx === -1) return prev;
+        const target = prev[idx];
+        let authorName: string | undefined;
+        if (configRef.current && data.reacted_id === -configRef.current.groupId) {
+          authorName = 'Вы';
+        } else if (target.user) {
+          authorName = target.user.first_name || 'Клиент';
+        }
+
+        const updated: ConversationItem = {
+          ...target,
+          lastReaction: data.reaction_id > 0 ? {
+            emoji: VK_REACTION_MAP[data.reaction_id] || '🔥',
+            date: Math.floor(Date.now() / 1000),
+            authorName,
+          } : undefined,
+        };
+
+        const rest = prev.filter((_, i) => i !== idx);
+        return [updated, ...rest];
+      });
     });
 
     const unregActivity = window.scmAPI.onActivity((ev) => {
@@ -308,20 +333,95 @@ export const App: React.FC = () => {
   };
 
   const handleSendReaction = async (cmid: number, reactionId: number) => {
-    if (!selectedPeerId || !window.scmAPI) return;
+    if (!selectedPeerId || !window.scmAPI || !config?.groupId) return;
+
+    const ourGroupId = -config.groupId;
+    const prevMessages = messages;
+
+    // Мгновенное оптимистичное обновление UI
+    setMessages((prev) =>
+      prev.map((m) => {
+        const mCmid = m.conversation_message_id || m.id;
+        if (mCmid !== cmid) return m;
+
+        let existingReactions = m.reactions ? [...m.reactions] : [];
+
+        // 1. Убираем нашу реакцию из других эмодзи
+        existingReactions = existingReactions
+          .map((r) => {
+            if (r.user_ids?.includes(ourGroupId)) {
+              const newUserIds = r.user_ids.filter((id) => id !== ourGroupId);
+              return { ...r, count: newUserIds.length, user_ids: newUserIds };
+            }
+            return r;
+          })
+          .filter((r) => r.count > 0);
+
+        // 2. Добавляем в целевую реакцию
+        const targetIdx = existingReactions.findIndex((r) => r.reaction_id === reactionId);
+        if (targetIdx >= 0) {
+          const target = existingReactions[targetIdx];
+          const userIds = target.user_ids ? [...target.user_ids] : [];
+          if (!userIds.includes(ourGroupId)) {
+            userIds.push(ourGroupId);
+          }
+          existingReactions[targetIdx] = {
+            ...target,
+            count: userIds.length,
+            user_ids: userIds,
+          };
+        } else {
+          existingReactions.push({
+            reaction_id: reactionId,
+            count: 1,
+            user_ids: [ourGroupId],
+          });
+        }
+
+        return { ...m, reactions: existingReactions };
+      })
+    );
+
     try {
       await window.scmAPI.sendReaction(selectedPeerId, cmid, reactionId);
     } catch (err) {
       console.error('Reaction error:', err);
+      setMessages(prevMessages);
     }
   };
 
   const handleDeleteReaction = async (cmid: number) => {
-    if (!selectedPeerId || !window.scmAPI?.deleteReaction) return;
+    if (!selectedPeerId || !window.scmAPI?.deleteReaction || !config?.groupId) return;
+
+    const ourGroupId = -config.groupId;
+    const prevMessages = messages;
+
+    // Мгновенное оптимистичное удаление UI
+    setMessages((prev) =>
+      prev.map((m) => {
+        const mCmid = m.conversation_message_id || m.id;
+        if (mCmid !== cmid) return m;
+
+        let existingReactions = m.reactions ? [...m.reactions] : [];
+        existingReactions = existingReactions
+          .map((r) => {
+            if (r.user_ids?.includes(ourGroupId)) {
+              const newUserIds = r.user_ids.filter((id) => id !== ourGroupId);
+              return { ...r, count: newUserIds.length, user_ids: newUserIds };
+            }
+            return r;
+          })
+          .filter((r) => r.count > 0);
+
+        return { ...m, reactions: existingReactions };
+      })
+    );
+
     try {
       await window.scmAPI.deleteReaction(selectedPeerId, cmid);
     } catch (err) {
       console.warn('Delete reaction error:', err);
+      setMessages(prevMessages);
     }
   };
 
